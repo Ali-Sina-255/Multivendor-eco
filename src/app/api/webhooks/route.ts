@@ -1,5 +1,6 @@
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { prisma } from "@/lib/prisma";
+
 import { NextRequest } from "next/server";
 
 import { clerkClient } from "@clerk/nextjs/server";
@@ -23,7 +24,6 @@ export async function POST(req: NextRequest) {
         name: `${data.first_name} ${data.last_name}`,
         email: primaryEmail,
         picture: data.image_url,
-        role: "USER",
       };
 
       const dbUser = await prisma.user.upsert({
