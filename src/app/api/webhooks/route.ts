@@ -1,9 +1,7 @@
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { prisma } from "@/lib/prisma";
-
 import { NextRequest } from "next/server";
-
-import { clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/clerk-sdk-node";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +19,7 @@ export async function POST(req: NextRequest) {
 
       const userData = {
         id: data.id,
-        name: `${data.first_name} ${data.last_name}`,
+        name: `${data.first_name} ${data.last_name}`.trim(),
         email: primaryEmail,
         picture: data.image_url,
       };
@@ -36,21 +34,24 @@ export async function POST(req: NextRequest) {
       });
 
       console.log(`User ${eventType}:`, dbUser);
-      const client = await clerkClient();
-      try {
-        await client.users.updateUserMetadata(data.id, {
-          privateMetadata: {
-            role: dbUser.role || "USER",
-          },
-        });
-      } catch (err) {
-        console.error("Failed to update Clerk metadata:", err);
-      }
+
+      await clerkClient.users.updateUserMetadata(data.id, {
+        privateMetadata: {
+          role: dbUser.role || "USER",
+        },
+      });
+    }
+
+    if (evt.type === "user.deleted") {
+      const userid = evt.data.id;
+      await prisma.user.delete({
+        where: { id: userid },
+      });
     }
 
     return new Response("Webhook received", { status: 200 });
   } catch (err) {
-    console.error("Error verifying webhook:", err);
+    console.error("❌ Error in webhook handler:", err);
     return new Response("Error verifying webhook", { status: 400 });
   }
 }
