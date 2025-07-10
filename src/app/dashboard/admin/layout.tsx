@@ -1,4 +1,5 @@
 import Header from "@/components/dashboard/header/header";
+import Sidebar from "@/components/dashboard/sidebar/sidebar";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import React, { ReactNode } from "react";
@@ -9,6 +10,7 @@ const AdminDashboardLayout = async ({ children }: { children: ReactNode }) => {
   return (
     <div className="w-full h-full">
       {/* sidebar */}
+      <Sidebar isAdmin />
       <div className="w-full ml-[300px]">
         {/* header */}
         <Header />
