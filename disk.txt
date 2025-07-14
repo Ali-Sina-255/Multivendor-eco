@@ -1,0 +1,7 @@
+sudo umount /dev/sda9
+sudo umount /dev/sda9
+sudo mkdir -p /mnt/diskd
+
+➜  ~ sudo mount -t ntfs-3g -o uid=1000,gid=1000 /dev/sda9 /mnt/diskd
+
+➜  ~ xdg-open /mnt/diskd

@@ -1,116 +1,158 @@
 "use client";
 
+import { FC, useEffect } from "react";
+import { useForm, SubmitHandler } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { v4 } from "uuid";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+
 import { Category } from "@/generated/prisma";
 import { CategoryFormSchema } from "@/lib/schemas";
-import { FC, useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
-import axios from "axios";
-import { toast } from "sonner";
-import { z } from "zod";
+
 import { AlertDialog } from "@/components/ui/alert-dialog";
 import {
   Card,
-  CardTitle,
   CardHeader,
+  CardTitle,
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
 import {
   Form,
-  FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
+  FormControl,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import ImageUpload from "../shared/image-upload";
 
-interface CategoryDetailProps {
-  data?: Category[]; // Array of categories
+import { upsertCategory } from "@/queries/category";
+
+interface CategoryDetailsProps {
+  data?: Category;
+  cloudinary_key: string;
 }
 
-const CategoryDetail: FC<CategoryDetailProps> = ({ data }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const route = useRouter();
+const CategoryDetails: FC<CategoryDetailsProps> = ({
+  data,
+  cloudinary_key,
+}) => {
+  const router = useRouter();
 
-  // Initialize the form
   const form = useForm<z.infer<typeof CategoryFormSchema>>({
     mode: "onChange",
     resolver: zodResolver(CategoryFormSchema),
     defaultValues: {
-      name: data?.[0]?.name || "", // Default to empty string if no data
-      image: data?.[0]?.image ? [{ url: data?.[0]?.image }] : [], // Default to empty array if no image
-      url: data?.[0]?.url || "", // Default to empty string if no URL
-      featured: data?.[0]?.featured || false, // Default to false if no featured status
+      name: data?.name || "",
+      image: data?.image ? [{ url: data.image }] : [],
+      url: data?.url || "",
+      featured: data?.featured || false,
     },
   });
 
-  // Check if form is submitting
   const isLoading = form.formState.isSubmitting;
 
-  // Reset the form whenever 'data' changes
+  // Reset on client after hydration
   useEffect(() => {
-    if (data && data.length > 0) {
+    if (typeof window !== "undefined" && data) {
       form.reset({
-        name: data[0]?.name || "",
-        image: data[0]?.image ? [{ url: data[0]?.image }] : [],
-        url: data[0]?.url || "",
-        featured: data[0]?.featured || false,
+        name: data.name || "",
+        image: data.image ? [{ url: data.image }] : [],
+        url: data.url || "",
+        featured: data.featured || false,
       });
     }
   }, [data, form]);
 
-  // Handle form submission
-  const handelSubmit = async (values: z.infer<typeof CategoryFormSchema>) => {
-    console.log(values);
+  const handleSubmit: SubmitHandler<
+    z.infer<typeof CategoryFormSchema>
+  > = async (values) => {
+    try {
+      // Let server/database handle createdAt/updatedAt
+      const response = await upsertCategory({
+        id: data?.id || v4(),
+        name: values.name,
+        image: values.image[0]?.url || "",
+        url: values.url,
+        featured: values.featured,
+      });
+
+      toast(data?.id ? "Category updated!" : `Created: "${response.name}"`);
+
+      if (data?.id) {
+        router.refresh();
+      } else {
+        router.push("/dashboard/admin/categories");
+      }
+    } catch (err: any) {
+      console.error("Upsert failed", err);
+      toast.error(err?.message || "Something went wrong");
+    }
   };
 
   return (
     <AlertDialog>
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Category INFORMATION</CardTitle>
+          <CardTitle>Category Information</CardTitle>
           <CardDescription>
             {data?.id
-              ? `Update ${data?.name} category information.`
-              : "Lets create a category . you can edit category later from the categories table page "}
+              ? `Edit "${data.name}" category`
+              : "Create a new category – you can edit it later."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form
-              onSubmit={form.handleSubmit(handelSubmit)}
+              onSubmit={form.handleSubmit(handleSubmit)}
               className="space-y-4"
             >
               <FormField
-                disabled={isLoading}
                 control={form.control}
-                name="name"
+                name="image"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category Name</FormLabel>
-
                     <FormControl>
-                      <Input placeholder="Name" {...field} />
+                      <ImageUpload
+                        type="profile"
+                        value={field.value.map((i) => i.url)}
+                        disabled={isLoading}
+                        onChange={(u) => field.onChange([{ url: u }])}
+                        onRemove={(u) =>
+                          field.onChange(field.value.filter((i) => i.url !== u))
+                        }
+                        cloudinary_key={cloudinary_key}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <FormField
-                disabled={isLoading}
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Category name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
                 control={form.control}
                 name="url"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category Url</FormLabel>
-
+                    <FormLabel>URL</FormLabel>
                     <FormControl>
                       <Input placeholder="/category-url" {...field} />
                     </FormControl>
@@ -119,34 +161,31 @@ const CategoryDetail: FC<CategoryDetailProps> = ({ data }) => {
                 )}
               />
               <FormField
-                disabled={isLoading}
                 control={form.control}
                 name="featured"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category Featured</FormLabel>
-
+                  <FormItem className="flex items-start space-x-3 border p-4 rounded-md">
                     <FormControl>
                       <Checkbox
                         checked={field.value}
+                        // @ts-ignore
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>
                     <div className="space-y-1 leading-none">
                       <FormLabel>Featured</FormLabel>
                       <FormDescription>
-                        This Category will appear on the home page
+                        This category will appear on the homepage.
                       </FormDescription>
                     </div>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
               <Button type="submit" disabled={isLoading}>
                 {isLoading
-                  ? "loading...."
+                  ? "Saving..."
                   : data?.id
-                  ? "save Category Information"
+                  ? "Update Category"
                   : "Create Category"}
               </Button>
             </form>
@@ -157,4 +196,4 @@ const CategoryDetail: FC<CategoryDetailProps> = ({ data }) => {
   );
 };
 
-export default CategoryDetail;
+export default CategoryDetails;
