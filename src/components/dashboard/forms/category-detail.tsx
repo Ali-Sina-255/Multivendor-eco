@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { v4 } from "uuid";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-
+import { z } from "zod";
 import { Category } from "@/generated/prisma";
 import { CategoryFormSchema } from "@/lib/schemas";
 
@@ -36,13 +36,9 @@ import { upsertCategory } from "@/queries/category";
 
 interface CategoryDetailsProps {
   data?: Category;
-  cloudinary_key: string;
 }
 
-const CategoryDetails: FC<CategoryDetailsProps> = ({
-  data,
-  cloudinary_key,
-}) => {
+const CategoryDetails: FC<CategoryDetailsProps> = ({ data }) => {
   const router = useRouter();
 
   const form = useForm<z.infer<typeof CategoryFormSchema>>({
@@ -75,12 +71,16 @@ const CategoryDetails: FC<CategoryDetailsProps> = ({
   > = async (values) => {
     try {
       // Let server/database handle createdAt/updatedAt
+      const now = new Date();
+
       const response = await upsertCategory({
         id: data?.id || v4(),
         name: values.name,
         image: values.image[0]?.url || "",
         url: values.url,
         featured: values.featured,
+        createdAt: data?.createdAt ?? now,
+        updateAt: now,
       });
 
       toast(data?.id ? "Category updated!" : `Created: "${response.name}"`);
@@ -127,7 +127,6 @@ const CategoryDetails: FC<CategoryDetailsProps> = ({
                         onRemove={(u) =>
                           field.onChange(field.value.filter((i) => i.url !== u))
                         }
-                        cloudinary_key={cloudinary_key}
                       />
                     </FormControl>
                     <FormMessage />
